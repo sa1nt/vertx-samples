@@ -11,7 +11,6 @@ import java.util.Random;
 import java.util.UUID;
 
 public class BiddingServiceVerticle extends AbstractVerticle {
-
     private final Logger logger = LoggerFactory
         .getLogger(BiddingServiceVerticle.class);
 
@@ -23,10 +22,10 @@ public class BiddingServiceVerticle extends AbstractVerticle {
 
         Router router = Router.router(vertx);
         router.get("/offer").handler(context -> {
-            String clientIdHeader = context.request()
+            String clientIdHeader = context
+                .request()
                 .getHeader("Client-Request-Id");
-            String clientId =
-                (clientIdHeader != null) ? clientIdHeader : "N/A";
+            String clientId = (clientIdHeader != null) ? clientIdHeader : "N/A";
             int myBid = 10 + random.nextInt(20);
             JsonObject payload = new JsonObject()
                 .put("origin", myId)
@@ -40,17 +39,24 @@ public class BiddingServiceVerticle extends AbstractVerticle {
                     context.response()
                         .setStatusCode(500)
                         .end();
-                    logger.error("{} injects an error (client-id={}, "
-                        + "artificialDelay={})",
-                        myId, myBid, clientId, artificialDelay);
+                    logger.error(
+                        "{} injects an error (client-id={}, artificialDelay={})",
+                        myId,
+                        myBid,
+                        clientId,
+                        artificialDelay
+                    );
                 } else {
                     context.response()
-                        .putHeader("Content-Type",
-                            "application/json")
+                        .putHeader("Content-Type", "application/json")
                         .end(payload.encode());
-                    logger.info("{} offers {} (client-id={}, " +
-                        "artificialDelay={})",
-                        myId, myBid, clientId, artificialDelay);
+                    logger.info(
+                        "{} offers {} (client-id={}, artificialDelay={})",
+                        myId,
+                        myBid,
+                        clientId,
+                        artificialDelay
+                    );
                 }
             });
         });
