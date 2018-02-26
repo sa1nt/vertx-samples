@@ -1,7 +1,6 @@
 package samples;
 
 import hu.akarnokd.rxjava2.interop.FlowableInterop;
-import io.reactivex.Flowable;
 import io.reactivex.Single;
 import io.vertx.core.Future;
 import io.vertx.core.json.JsonArray;
@@ -23,7 +22,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 public class BestOfferServiceVerticle extends AbstractVerticle {
-    private final AtomicLong requestIds = new AtomicLong();
 
     private static final JsonArray DEFAULT_TARGETS = new JsonArray()
         .add(new JsonObject()
@@ -38,7 +36,9 @@ public class BestOfferServiceVerticle extends AbstractVerticle {
             .put("host", "localhost")
             .put("port", 3002)
             .put("path", "/offer"));
+
     private final Logger logger = LoggerFactory.getLogger(BestOfferServiceVerticle.class);
+    private final AtomicLong requestIds = new AtomicLong();
     private List<JsonObject> targets;
     private WebClient webClient;
 
@@ -83,29 +83,39 @@ public class BestOfferServiceVerticle extends AbstractVerticle {
                 logger.info("#{} received offer {}", requestId, body.encodePrettily());
                 return Optional.of(body);
             })
-            .onErrorReturnItem(Optional.empty());
+            .onErrorReturn(e -> {
+                logger.error("request #{} on port {} returned error", requestId, biddingServiceConfig.getInteger("port"));
+                return Optional.empty();
+            });
     }
 
     private void findBestOffer(HttpServerRequest request) {
         String requestId = String.valueOf(requestIds.getAndIncrement());
 
-        List<Single<Optional<JsonObject>>> responses = targets.stream()
+        // A list of request blueprints, which'll be executed when subscribed on
+        List<Single<Optional<JsonObject>>> biddingServiceRequests = targets.stream()
             .map(targetConfig -> requestBiddingService(targetConfig, requestId))
             .collect(Collectors.toList());
 
-        Single.merge(responses)
-            .concatMapDelayError(FlowableInterop::fromOptional)
-            .sorted(Comparator.<JsonObject, Integer>comparing(j -> j.getInteger("bid")).reversed())
-            .switchIfEmpty(Flowable.error(new Exception("No offer could be found for requestId=" + requestId)))
+        // Combine requests to be launched in parallel
+        Single.mergeDelayError(biddingServiceRequests)
+            // Collect results, skipping empty Optionals
+            .concatMap(FlowableInterop::fromOptional)
+            // Sort ascending
+            .sorted(Comparator.comparing(j -> j.getInteger("bid")))
+            // Take first (i.e. smallest) or signal an error
+            .firstOrError()
             .subscribe(
+                // Handle OK case (when there was at least one successful response from a BiddingServiceVerticle)
                 best -> {
                     logger.info("#{} best offer: {}", requestId, best.encodePrettily());
                     request.response()
                         .putHeader("Content-Type", "application/json")
                         .end(best.encode());
                 },
+                // Handle case when all BiddingServiceVerticles timed out or threw an error
                 error -> {
-                    logger.error("#{} ends in error", requestId, error);
+                    logger.error("#{} ends in error {}", requestId, error.getMessage());
                     request.response()
                         .setStatusCode(502)
                         .end();
