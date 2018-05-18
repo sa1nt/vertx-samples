@@ -13,7 +13,7 @@
         <!-- vert.x properties -->
         <vertx.version>3.5.0</vertx.version>
         <vertx.verticle>samples.MainVerticle</vertx.verticle>
-        <!-- Maven plugins  -->
+        <!-- Maven plugins -->
         <vertx-maven-plugin.version>1.0.9</vertx-maven-plugin.version>
     </properties>
 
